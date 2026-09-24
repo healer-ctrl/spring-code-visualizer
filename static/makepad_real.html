@@ -6,115 +6,204 @@
     <title>Infinite Canvas - Real Project Scanner</title>
     <style>
         body { margin: 0; padding: 0; background-color: #1a1a1a; color: #ccc; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; overflow: auto; }
-        
+
         #canvas {
-            width: 10000px; height: 10000px; /* Huge area to scroll around */
+            width: 10000px; height: 10000px;
             position: relative;
-            background-image: 
-                linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+            background-image:
+                linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px);
             background-size: 50px 50px;
         }
 
-        header { position: fixed; top: 0; left: 0; right: 0; background-color: rgba(37, 37, 38, 0.95); padding: 10px 20px; border-bottom: 1px solid #3c3c3c; display: flex; align-items: center; gap: 15px; z-index: 1000; box-shadow: 0 4px 6px rgba(0,0,0,0.5); }
-        header h1 { margin: 0; font-size: 16px; color: #fff; white-space: nowrap; }
-        header input { background: #3c3c3c; border: 1px solid #555; color: #fff; padding: 6px 10px; border-radius: 4px; width: 250px; }
-        header button { background-color: #0e639c; color: white; border: none; padding: 6px 15px; border-radius: 4px; cursor: pointer; }
+        header {
+            position: fixed; top: 0; left: 0; right: 0;
+            background-color: rgba(37,37,38,0.97); padding: 10px 20px;
+            border-bottom: 1px solid #3c3c3c; display: flex; align-items: center;
+            gap: 12px; z-index: 2000; box-shadow: 0 4px 6px rgba(0,0,0,0.5);
+        }
+        header h1 { margin: 0; font-size: 15px; color: #fff; white-space: nowrap; }
+        header input { background: #3c3c3c; border: 1px solid #555; color: #fff; padding: 6px 10px; border-radius: 4px; width: 260px; font-size: 13px; }
+        header button { background-color: #0e639c; color: white; border: none; padding: 6px 14px; border-radius: 4px; cursor: pointer; font-size: 13px; }
         header button:hover { background-color: #1177bb; }
+        #stats { color: #888; font-size: 12px; margin-left: auto; white-space: nowrap; }
 
         .code-window {
             position: absolute;
-            width: 380px;
-            height: 280px;
+            width: 390px; height: 290px;
             background-color: #1e1e1e;
             border: 1px solid #444;
             border-radius: 8px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-            display: flex;
-            flex-direction: column;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+            display: flex; flex-direction: column;
             overflow: hidden;
-            transition: box-shadow 0.2s;
         }
-        
-        .code-window:hover { box-shadow: 0 10px 40px rgba(0,0,0,0.8); z-index: 50 !important; }
+        .code-window:hover { box-shadow: 0 10px 40px rgba(0,0,0,0.9); z-index: 50 !important; }
+        .code-window.active-editor { border-color: #4A90E2; }
 
         .titlebar {
-            background-color: #2d2d2d;
-            padding: 8px 15px;
-            font-size: 13px;
-            font-weight: bold;
-            color: #dcb67a;
-            cursor: grab;
-            user-select: none;
-            display: flex;
-            justify-content: space-between;
-            border-bottom: 1px solid #1e1e1e;
+            background-color: #2d2d2d; padding: 7px 12px;
+            font-size: 12px; font-weight: bold; color: #dcb67a;
+            cursor: grab; user-select: none;
+            display: flex; justify-content: space-between; align-items: center;
+            border-bottom: 1px solid #1e1e1e; flex-shrink: 0;
         }
         .titlebar:active { cursor: grabbing; }
+        .badge {
+            font-size: 10px; padding: 2px 6px; border-radius: 3px;
+            background-color: rgba(255,255,255,0.1); color: #aaa; font-weight: normal;
+        }
 
-        .editor-container { flex-grow: 1; position: relative; }
-        .drag-shield { position: absolute; top: 0; left: 0; right: 0; bottom: 0; z-index: 10; display: none; }
+        .editor-area { flex-grow: 1; position: relative; overflow: hidden; }
+        .drag-shield { position: absolute; top: 0; left: 0; right: 0; bottom: 0; z-index: 20; display: none; }
+
+        /* Code preview shown when Monaco is NOT loaded (off-screen) */
+        .code-preview {
+            position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+            overflow: hidden; padding: 10px;
+            font-family: 'Menlo', 'Consolas', monospace;
+            font-size: 11px; line-height: 1.5; color: #d4d4d4;
+            background: #1e1e1e; white-space: pre; box-sizing: border-box;
+            cursor: text;
+        }
+        .code-preview:hover { opacity: 0.8; }
+        .code-preview .kw  { color: #569cd6; }
+        .code-preview .ann { color: #9cdcfe; }
+        .code-preview .str { color: #ce9178; }
+        .code-preview .cmt { color: #6a9955; }
+
+        /* Monaco host — sits on top of preview when active */
+        .monaco-host {
+            position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+            display: none; /* hidden until IntersectionObserver activates it */
+        }
+        .monaco-host.active { display: block; }
 
         #svg-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1; }
-        path.connection { fill: none; stroke: #4A90E2; stroke-width: 2; opacity: 0.5; stroke-dasharray: 4,4; }
-        
-        #loading { position: fixed; top: 60px; left: 20px; color: #50E3C2; font-weight: bold; z-index: 1000; display: none; background: #252526; padding: 10px; border-radius: 4px; border: 1px solid #50E3C2; }
+        path.connection { fill: none; stroke: #4A90E2; stroke-width: 2; opacity: 0.4; stroke-dasharray: 5,5; }
+
+        #loading {
+            position: fixed; top: 60px; left: 50%; transform: translateX(-50%);
+            color: #50E3C2; font-weight: bold; z-index: 3000; display: none;
+            background: #252526; padding: 12px 20px; border-radius: 6px;
+            border: 1px solid #50E3C2; font-size: 13px;
+        }
     </style>
 </head>
 <body>
     <header>
-        <h1>Dynamic Makepad UI</h1>
-        <input type="text" id="projectPath" value="demo-spring-project" placeholder="Path to project">
-        <button onclick="scanAndRender()">Render Live Project</button>
-        <button onclick="window.location.href='/'" style="background:#555;">Back</button>
+        <h1>🗺 Spring Canvas IDE</h1>
+        <input type="text" id="projectPath" placeholder="Relative path to your project (e.g. Documents/MyProject)">
+        <button onclick="scanAndRender()">▶ Render Project</button>
+        <button onclick="window.location.href='/'" style="background:#444;">← Editor</button>
+        <span id="stats"></span>
     </header>
 
-    <div id="loading">Scanning and initializing Monaco editors...</div>
+    <div id="loading">Scanning project files...</div>
 
     <div id="canvas">
         <svg id="svg-layer"></svg>
     </div>
 
+    <!-- Monaco loader -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.36.1/min/vs/loader.min.js"></script>
     <script>
-        const canvas = document.getElementById('canvas');
+        const canvas   = document.getElementById('canvas');
         const svgLayer = document.getElementById('svg-layer');
+
         let connections = [];
-        let edgesData = [];
-        let nodesData = [];
+        let monacoReady = false;
+        // nodeId → { editor: MonacoEditor | null, content: string }
+        const nodeState = {};
 
         const groupColors = {
-            Controller: '#4A90E2',
-            Service: '#50E3C2',
-            Repository: '#B8E986',
-            DTO: '#F5A623',
-            Entity: '#D0021B',
-            Other: '#9B9B9B'
+            Controller: '#4A90E2', Service: '#50E3C2', Repository: '#B8E986',
+            DTO: '#F5A623', Entity: '#D0021B', Configuration: '#8B572A',
+            Component: '#9B59B6', Exception: '#E74C3C', Other: '#9B9B9B'
         };
 
-        // --- Dragging Logic ---
-        let draggedWin = null;
-        let offsetX = 0, offsetY = 0;
+        // ── Monaco init ──────────────────────────────────────────────────────
+        require.config({ paths: { vs: 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.36.1/min/vs' }});
+        require(['vs/editor/editor.main'], () => { monacoReady = true; });
 
-        document.addEventListener('mousedown', (e) => {
+        // ── Lightweight syntax highlighter for the <pre> preview ─────────────
+        function highlight(code) {
+            return code
+                .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+                .replace(/(@\w+)/g, '<span class="ann">$1</span>')
+                .replace(/\b(public|private|protected|class|interface|record|new|return|void|final|static|extends|implements|import|package|throws|abstract)\b/g, '<span class="kw">$1</span>')
+                .replace(/(\/\/[^\n]*)/g, '<span class="cmt">$1</span>')
+                .replace(/(".*?")/g, '<span class="str">$1</span>');
+        }
+
+        // ── IntersectionObserver: lazy Monaco mount/unmount ──────────────────
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                const win    = entry.target;
+                const nodeId = win.dataset.nodeId;
+                const state  = nodeState[nodeId];
+                if (!state) return;
+
+                const monacoHost = win.querySelector('.monaco-host');
+                const preview    = win.querySelector('.code-preview');
+
+                if (entry.isIntersecting) {
+                    // Window is visible → mount Monaco
+                    if (!state.editor && monacoReady) {
+                        monacoHost.classList.add('active');
+                        win.classList.add('active-editor');
+                        state.editor = monaco.editor.create(monacoHost, {
+                            value: state.content,
+                            language: 'java',
+                            theme: 'vs-dark',
+                            minimap: { enabled: false },
+                            scrollBeyondLastLine: false,
+                            automaticLayout: true,
+                            fontSize: 11,
+                            lineNumbers: 'off',
+                            folding: true,
+                            renderLineHighlight: 'none',
+                        });
+                        if (preview) preview.style.display = 'none';
+                    }
+                } else {
+                    // Window is off-screen → destroy Monaco, save memory
+                    if (state.editor) {
+                        state.content = state.editor.getValue();
+                        state.editor.dispose();
+                        state.editor = null;
+                        monacoHost.classList.remove('active');
+                        win.classList.remove('active-editor');
+                        if (preview) preview.style.display = 'block';
+                    }
+                }
+            });
+        }, {
+            root: null,           // viewport
+            rootMargin: '200px',  // start loading 200px before it enters view
+            threshold: 0
+        });
+
+        // ── Drag logic ───────────────────────────────────────────────────────
+        let draggedWin = null, offX = 0, offY = 0;
+
+        document.addEventListener('mousedown', e => {
             if (e.target.closest('.titlebar')) {
                 draggedWin = e.target.closest('.code-window');
                 document.querySelectorAll('.code-window').forEach(w => w.style.zIndex = 10);
                 draggedWin.style.zIndex = 100;
                 document.querySelectorAll('.drag-shield').forEach(s => s.style.display = 'block');
-                const rect = draggedWin.getBoundingClientRect();
-                offsetX = e.clientX - rect.left;
-                offsetY = e.clientY - rect.top;
+                const r = draggedWin.getBoundingClientRect();
+                offX = e.clientX - r.left;
+                offY = e.clientY - r.top;
             }
         });
 
-        document.addEventListener('mousemove', (e) => {
+        document.addEventListener('mousemove', e => {
             if (!draggedWin) return;
-            const canvasRect = canvas.getBoundingClientRect();
-            let newX = e.clientX - canvasRect.left - offsetX;
-            let newY = e.clientY - canvasRect.top - offsetY;
-            draggedWin.style.left = newX + 'px';
-            draggedWin.style.top = newY + 'px';
+            const cr = canvas.getBoundingClientRect();
+            draggedWin.style.left = (e.clientX - cr.left - offX) + 'px';
+            draggedWin.style.top  = (e.clientY - cr.top  - offY) + 'px';
             updateLines();
         });
 
@@ -123,79 +212,75 @@
             document.querySelectorAll('.drag-shield').forEach(s => s.style.display = 'none');
         });
 
-        // --- Line Drawing Logic ---
+        // ── SVG connection lines ──────────────────────────────────────────────
         function updateLines() {
-            connections.forEach(conn => {
-                const w1 = document.getElementById(`win_${conn.from}`);
-                const w2 = document.getElementById(`win_${conn.to}`);
-                const path = document.getElementById(conn.pathId);
-                
+            connections.forEach(({ from, to, pathId }) => {
+                const w1   = document.getElementById(`win_${from}`);
+                const w2   = document.getElementById(`win_${to}`);
+                const path = document.getElementById(pathId);
                 if (!w1 || !w2 || !path) return;
 
-                const x1 = parseInt(w1.style.left) + 380; // right edge
-                const y1 = parseInt(w1.style.top) + 140;  // middle
-                const x2 = parseInt(w2.style.left);       // left edge
-                const y2 = parseInt(w2.style.top) + 140;
-                
-                const cp1x = x1 + 80;
-                const cp2x = x2 - 80;
-                
-                path.setAttribute('d', `M ${x1} ${y1} C ${cp1x} ${y1}, ${cp2x} ${y2}, ${x2} ${y2}`);
+                const x1 = parseInt(w1.style.left) + 390;
+                const y1 = parseInt(w1.style.top)  + 145;
+                const x2 = parseInt(w2.style.left);
+                const y2 = parseInt(w2.style.top)  + 145;
+
+                path.setAttribute('d', `M${x1} ${y1} C${x1+90} ${y1},${x2-90} ${y2},${x2} ${y2}`);
             });
         }
 
+        // ── Main: scan project & render canvas ───────────────────────────────
         async function scanAndRender() {
-            document.getElementById('loading').style.display = 'block';
-            
-            // Clean up old elements
-            document.querySelectorAll('.code-window').forEach(w => w.remove());
+            const loading = document.getElementById('loading');
+            loading.style.display = 'block';
+            loading.textContent   = 'Scanning project files...';
+
+            // Teardown previous run
+            document.querySelectorAll('.code-window').forEach(w => {
+                observer.unobserve(w);
+                const id = w.dataset.nodeId;
+                if (nodeState[id]?.editor) { nodeState[id].editor.dispose(); }
+                w.remove();
+            });
+            Object.keys(nodeState).forEach(k => delete nodeState[k]);
             svgLayer.innerHTML = '';
             connections = [];
-            
-            const path = document.getElementById('projectPath').value;
-            try {
-                const res = await fetch(`/api/architecture?path=${encodeURIComponent(path)}`);
-                const data = await res.json();
-                
-                if(data.error) {
-                    alert(data.error);
-                    document.getElementById('loading').style.display = 'none';
-                    return;
-                }
-                
-                nodesData = data.nodes;
-                edgesData = data.edges;
-                
-                // Render HTML
-                nodesData.forEach((node, i) => {
-                    const win = document.createElement('div');
-                    win.className = 'code-window';
-                    win.id = `win_${node.id}`;
-                    
-                    // Basic layout math
-                    let cols = 6;
-                    let x = 100 + (i % cols) * 450;
-                    let y = 150 + Math.floor(i / cols) * 350;
-                    win.style.left = x + 'px';
-                    win.style.top = y + 'px';
-                    
-                    let color = groupColors[node.group] || groupColors.Other;
-                    
-                    // Base64 encode code to prevent HTML injection issues
-                    const safeCode = btoa(unescape(encodeURIComponent(node.content || '// No content')));
 
-                    win.innerHTML = `
-                        <div class="titlebar"><span style="color:${color}">📄 ${node.label}.java</span> <span>${node.group.toUpperCase()}</span></div>
-                        <div class="editor-container">
-                            <div class="drag-shield"></div>
-                            <div id="editor_${node.id}" class="monaco-host" style="width:100%; height:100%;" data-code="${safeCode}"></div>
-                        </div>
-                    `;
-                    canvas.appendChild(win);
+            const path = document.getElementById('projectPath').value.trim();
+
+            try {
+                const res  = await fetch(`/api/architecture?path=${encodeURIComponent(path)}`);
+                const data = await res.json();
+
+                if (data.error) { alert(data.error); loading.style.display = 'none'; return; }
+
+                const nodes = data.nodes;
+                const edges = data.edges;
+
+                document.getElementById('stats').textContent =
+                    `${nodes.length} classes · ${edges.length} dependencies`;
+
+                loading.textContent = `Rendering ${nodes.length} class windows...`;
+
+                // Layout: group by type, arrange in type columns
+                const groups  = {};
+                nodes.forEach(n => { (groups[n.group] = groups[n.group] || []).push(n); });
+                const typeOrder = ['Controller','Service','Repository','Entity','DTO','Component','Configuration','Exception','Other'];
+                let col = 0;
+
+                typeOrder.forEach(type => {
+                    const group = groups[type];
+                    if (!group) return;
+                    group.forEach((node, row) => {
+                        const x = 80 + col * 430;
+                        const y = 150 + row * 320;
+                        renderWindow(node, x, y);
+                    });
+                    col++;
                 });
 
-                // Render Edges
-                edgesData.forEach((edge, i) => {
+                // Edges
+                edges.forEach((edge, i) => {
                     const pathEl = document.createElementNS('http://www.w3.org/2000/svg', 'path');
                     pathEl.className.baseVal = 'connection';
                     pathEl.id = `conn_${i}`;
@@ -203,37 +288,51 @@
                     connections.push({ from: edge.from, to: edge.to, pathId: pathEl.id });
                 });
 
-                // Setup Monaco
-                require(['vs/editor/editor.main'], function() {
-                    document.querySelectorAll('.monaco-host').forEach(host => {
-                        try {
-                            const code = decodeURIComponent(escape(atob(host.getAttribute('data-code'))));
-                            monaco.editor.create(host, { 
-                                value: code, 
-                                language: 'java', 
-                                theme: 'vs-dark', 
-                                minimap: { enabled: false },
-                                scrollBeyondLastLine: false,
-                                automaticLayout: true
-                            });
-                        } catch(e) { console.error('Monaco init error', e); }
-                    });
-                    
-                    // Initial draw
-                    setTimeout(() => { updateLines(); document.getElementById('loading').style.display = 'none'; }, 500);
-                });
-                
+                setTimeout(() => { updateLines(); loading.style.display = 'none'; }, 300);
+
             } catch (err) {
-                alert("Error fetching data: " + err);
-                document.getElementById('loading').style.display = 'none';
+                alert('Failed: ' + err);
+                loading.style.display = 'none';
             }
         }
 
-        // Initialize Monaco AMD loader
-        require.config({ paths: { 'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.36.1/min/vs' }});
-        
-        // Auto-run on load
-        window.onload = scanAndRender;
+        function renderWindow(node, x, y) {
+            const color   = groupColors[node.group] || groupColors.Other;
+            const content = node.content || '// No content';
+
+            // Store state
+            nodeState[node.id] = { editor: null, content };
+
+            const win = document.createElement('div');
+            win.className    = 'code-window';
+            win.id           = `win_${node.id}`;
+            win.dataset.nodeId = node.id;
+            win.style.left   = x + 'px';
+            win.style.top    = y + 'px';
+
+            win.innerHTML = `
+                <div class="titlebar">
+                    <span style="color:${color}" title="${node.title}">📄 ${node.label}.java</span>
+                    <span class="badge">${node.group}</span>
+                </div>
+                <div class="editor-area">
+                    <div class="drag-shield"></div>
+                    <!-- Lightweight preview (always present, hidden when Monaco active) -->
+                    <div class="code-preview">${highlight(content.slice(0, 2000))}</div>
+                    <!-- Monaco mounts here lazily -->
+                    <div class="monaco-host"></div>
+                </div>
+            `;
+
+            canvas.appendChild(win);
+            observer.observe(win);  // 👈 This is the magic
+        }
+
+        // Auto-run on load if path is pre-filled
+        window.onload = () => {
+            const path = document.getElementById('projectPath').value.trim();
+            if (path) scanAndRender();
+        };
     </script>
 </body>
 </html>
