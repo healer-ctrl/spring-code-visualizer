@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spring Integration Architecture Map (Demo)</title>
+    <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+    <style>
+        body { margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #1e1e1e; color: #cccccc; }
+        header { background-color: #252526; padding: 15px; border-bottom: 1px solid #3c3c3c; display: flex; align-items: center; justify-content: space-between; height: 50px; box-sizing: border-box; }
+        .title-area h1 { margin: 0; font-size: 18px; color: #fff; }
+        .title-area p { margin: 5px 0 0 0; font-size: 12px; color: #888; }
+        #mynetwork { width: 100%; height: calc(100vh - 50px); background-color: #1e1e1e; }
+        
+        #legend { position: absolute; bottom: 20px; left: 20px; background: rgba(37, 37, 38, 0.9); padding: 15px; border-radius: 8px; border: 1px solid #3c3c3c; box-shadow: 0 4px 6px rgba(0,0,0,0.3); z-index: 10; }
+        .legend-item { display: flex; align-items: center; margin-bottom: 8px; font-size: 12px; color: #fff; }
+        .legend-color { width: 16px; height: 16px; border-radius: 50%; margin-right: 10px; }
+        .back-btn { background-color: #0e639c; color: white; border: none; padding: 6px 15px; border-radius: 4px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="title-area">
+            <h1>Spring Integration Architecture Map (Interactive Mockup)</h1>
+            <p>Hardcoded presentation to visualize the concept of DTOs, Services, and Controllers mapping.</p>
+        </div>
+        <div>
+            <button class="back-btn" onclick="window.location.href='/'">Back to Code Editor</button>
+        </div>
+    </header>
+    
+    <div id="error-box" style="display:none; color: red; padding: 20px;"></div>
+    <div id="mynetwork"></div>
+
+    <div id="legend">
+        <div class="legend-item"><div class="legend-color" style="background: #4A90E2;"></div> Controller</div>
+        <div class="legend-item"><div class="legend-color" style="background: #50E3C2;"></div> Service</div>
+        <div class="legend-item"><div class="legend-color" style="background: #B8E986;"></div> Repository</div>
+        <div class="legend-item"><div class="legend-color" style="background: #F5A623;"></div> DTO / Request / Response</div>
+        <div class="legend-item"><div class="legend-color" style="background: #D0021B;"></div> Entity</div>
+    </div>
+
+    <script>
+        try {
+            if (typeof vis === 'undefined') {
+                throw new Error("vis-network library failed to load. Check your internet connection.");
+            }
+            
+            const mockNodes = [
+                { id: 1, label: "OrderController", group: "Controller", title: "Handles HTTP requests for Orders" },
+                { id: 2, label: "OrderRequestDTO", group: "DTO", title: "Input Payload" },
+                { id: 3, label: "OrderResponseDTO", group: "DTO", title: "Output Payload" },
+                { id: 4, label: "OrderService", group: "Service", title: "Core Business Logic" },
+                { id: 5, label: "PaymentService", group: "Service", title: "External Payment Gateway Integration" },
+                { id: 6, label: "NotificationService", group: "Service", title: "Sends emails/SMS" },
+                { id: 7, label: "OrderRepository", group: "Repository", title: "Database Access" },
+                { id: 8, label: "OrderEntity", group: "Entity", title: "JPA Entity mapped to DB table" },
+                { id: 9, label: "PaymentRequestDTO", group: "DTO", title: "Payload to Payment Gateway" },
+            ];
+
+            const mockEdges = [
+                { from: 1, to: 2, arrows: "to", label: "receives (Input)" },
+                { from: 1, to: 4, arrows: "to", label: "calls" },
+                { from: 4, to: 3, arrows: "to", label: "returns (Output)" },
+                { from: 4, to: 7, arrows: "to", label: "saves" },
+                { from: 7, to: 8, arrows: "to", label: "manages" },
+                { from: 4, to: 5, arrows: "to", label: "integrates" },
+                { from: 4, to: 6, arrows: "to", label: "triggers" },
+                { from: 5, to: 9, arrows: "to", label: "sends payload" }
+            ];
+
+            const container = document.getElementById('mynetwork');
+            const data = {
+                nodes: new vis.DataSet(mockNodes),
+                edges: new vis.DataSet(mockEdges)
+            };
+
+            const options = {
+                nodes: {
+                    shape: 'dot', size: 22, font: { size: 14, color: '#ffffff', face: 'Segoe UI' },
+                    borderWidth: 2, shadow: true
+                },
+                edges: {
+                    width: 2, font: { align: 'top', color: '#aaaaaa', size: 11, background: '#1e1e1e' },
+                    color: { color: '#666666', highlight: '#ffffff' },
+                    smooth: { type: 'continuous' }
+                },
+                groups: {
+                    Controller: { color: { background: '#4A90E2', border: '#2c3e50' } },
+                    Service: { color: { background: '#50E3C2', border: '#2c3e50' } },
+                    Repository: { color: { background: '#B8E986', border: '#2c3e50' } },
+                    DTO: { color: { background: '#F5A623', border: '#2c3e50' } },
+                    Entity: { color: { background: '#D0021B', border: '#2c3e50' } }
+                },
+                physics: {
+                    forceAtlas2Based: { gravitationalConstant: -120, centralGravity: 0.015, springLength: 200, springConstant: 0.05 },
+                    solver: 'forceAtlas2Based', stabilization: { iterations: 150 }
+                }
+            };
+
+            const network = new vis.Network(container, data, options);
+        } catch (error) {
+            const errBox = document.getElementById('error-box');
+            errBox.style.display = 'block';
+            errBox.innerText = 'Error loading graph: ' + error.message;
+            console.error(error);
+        }
+    </script>
+</body>
+</html>

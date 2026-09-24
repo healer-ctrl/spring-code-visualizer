@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Infinite Canvas - Big Project Stress Test</title>
+    <style>
+        body { margin: 0; padding: 0; background-color: #1a1a1a; color: #ccc; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; overflow: auto; }
+        
+        /* The infinite canvas */
+        #canvas {
+            width: 5000px; height: 3000px; /* Huge area to scroll around */
+            position: relative;
+            background-image: 
+                linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+            background-size: 50px 50px;
+        }
+
+        header { position: fixed; top: 0; left: 0; right: 0; background-color: rgba(37, 37, 38, 0.9); padding: 15px; border-bottom: 1px solid #3c3c3c; display: flex; justify-content: space-between; z-index: 1000; box-shadow: 0 4px 6px rgba(0,0,0,0.5); }
+        header h1 { margin: 0; font-size: 16px; color: #fff; }
+        header p { margin: 0; font-size: 12px; color: #aaa; margin-top: 4px; }
+
+        /* Draggable Code Windows */
+        .code-window {
+            position: absolute;
+            width: 350px;
+            height: 250px;
+            background-color: #1e1e1e;
+            border: 1px solid #444;
+            border-radius: 8px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .titlebar {
+            background-color: #2d2d2d;
+            padding: 8px 15px;
+            font-size: 13px;
+            font-weight: bold;
+            color: #dcb67a;
+            cursor: grab;
+            user-select: none;
+            display: flex;
+            justify-content: space-between;
+            border-bottom: 1px solid #1e1e1e;
+        }
+        
+        .titlebar:active { cursor: grabbing; }
+
+        .editor-container {
+            flex-grow: 1;
+            position: relative;
+        }
+        
+        .drag-shield {
+            position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+            z-index: 10; display: none;
+        }
+
+        /* Connecting SVG lines */
+        #svg-layer {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none; z-index: 1;
+        }
+        
+        path.connection {
+            fill: none; stroke: #4A90E2; stroke-width: 2; stroke-dasharray: 4,4;
+            opacity: 0.4;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div>
+            <h1>Corporate Project Stress Test (30 Live Code Editors)</h1>
+            <p>Scroll around the canvas. Drag the windows to see if performance drops.</p>
+        </div>
+        <div>
+            <button onclick="window.location.href='/'" style="background:#0e639c; color:white; border:none; padding:8px 15px; border-radius:4px; cursor:pointer;">Exit</button>
+        </div>
+    </header>
+
+    <div id="canvas">
+        <svg id="svg-layer"></svg>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.36.1/min/vs/loader.min.js"></script>
+    <script>
+        const NUM_MODULES = 10; // 10 sets of (Controller, Service, Repo) = 30 windows
+        const canvas = document.getElementById('canvas');
+        const svgLayer = document.getElementById('svg-layer');
+        const connections = [];
+
+        // Procedurally generate 30 windows
+        for (let i = 0; i < NUM_MODULES; i++) {
+            const types = [
+                { name: 'Controller', color: '#4A90E2', code: `@RestController\npublic class Module${i}Controller {\n    private final Module${i}Service service;\n    public Module${i}Controller(Module${i}Service svc) { this.service = svc; }\n}` },
+                { name: 'Service', color: '#50E3C2', code: `@Service\npublic class Module${i}Service {\n    private final Module${i}Repo repo;\n    public Module${i}Service(Module${i}Repo r) { this.repo = r; }\n}` },
+                { name: 'Repository', color: '#B8E986', code: `@Repository\npublic interface Module${i}Repo extends JpaRepository<Entity, Long> {\n    // query methods\n}` }
+            ];
+
+            types.forEach((type, colIndex) => {
+                const winIndex = (i * 3) + colIndex;
+                const win = document.createElement('div');
+                win.className = 'code-window';
+                win.id = 'win' + winIndex;
+                
+                // Lay them out in a large grid
+                win.style.left = (200 + colIndex * 450) + 'px';
+                win.style.top = (150 + i * 300) + 'px';
+                
+                win.innerHTML = `
+                    <div class="titlebar"><span style="color:${type.color}">📄 Module${i}${type.name}.java</span> <span>${type.name.toUpperCase()}</span></div>
+                    <div class="editor-container">
+                        <div class="drag-shield"></div>
+                        <div id="editor${winIndex}" class="monaco-host" style="width:100%; height:100%;" data-code="${btoa(type.code)}"></div>
+                    </div>
+                `;
+                canvas.appendChild(win);
+
+                // Add lines (Controller -> Service, Service -> Repo)
+                if (colIndex > 0) {
+                    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                    path.className.baseVal = 'connection';
+                    path.id = `conn_${winIndex - 1}_${winIndex}`;
+                    svgLayer.appendChild(path);
+                    connections.push({ from: `win${winIndex - 1}`, to: `win${winIndex}`, pathId: path.id });
+                }
+            });
+        }
+
+        // --- Line Drawing Logic ---
+        function updateLines() {
+            connections.forEach(conn => {
+                const w1 = document.getElementById(conn.from);
+                const w2 = document.getElementById(conn.to);
+                const path = document.getElementById(conn.pathId);
+
+                const x1 = parseInt(w1.style.left) + 350; // width
+                const y1 = parseInt(w1.style.top) + 125;  // half height
+                const x2 = parseInt(w2.style.left);
+                const y2 = parseInt(w2.style.top) + 125;
+                
+                const cp1x = x1 + 100;
+                const cp2x = x2 - 100;
+                
+                path.setAttribute('d', `M ${x1} ${y1} C ${cp1x} ${y1}, ${cp2x} ${y2}, ${x2} ${y2}`);
+            });
+        }
+
+        // --- Dragging Logic ---
+        let draggedWin = null;
+        let offsetX = 0, offsetY = 0;
+
+        document.addEventListener('mousedown', (e) => {
+            if (e.target.closest('.titlebar')) {
+                draggedWin = e.target.closest('.code-window');
+                
+                // Bring to front
+                document.querySelectorAll('.code-window').forEach(w => w.style.zIndex = 10);
+                draggedWin.style.zIndex = 100;
+
+                // Show drag shields
+                document.querySelectorAll('.drag-shield').forEach(s => s.style.display = 'block');
+
+                const rect = draggedWin.getBoundingClientRect();
+                // We use scroll offset because canvas is huge
+                offsetX = e.clientX - rect.left;
+                offsetY = e.clientY - rect.top;
+            }
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (!draggedWin) return;
+            // Add scroll amounts to support dragging in large canvas
+            const canvasRect = canvas.getBoundingClientRect();
+            let newX = e.clientX - canvasRect.left - offsetX;
+            let newY = e.clientY - canvasRect.top - offsetY;
+            
+            draggedWin.style.left = newX + 'px';
+            draggedWin.style.top = newY + 'px';
+            updateLines();
+        });
+
+        document.addEventListener('mouseup', () => {
+            draggedWin = null;
+            document.querySelectorAll('.drag-shield').forEach(s => s.style.display = 'none');
+        });
+
+        // Initial line draw
+        updateLines();
+
+        // --- Monaco Editor Logic ---
+        require.config({ paths: { 'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.36.1/min/vs' }});
+        require(['vs/editor/editor.main'], function() {
+            document.querySelectorAll('.monaco-host').forEach(host => {
+                const code = atob(host.getAttribute('data-code'));
+                monaco.editor.create(host, { 
+                    value: code, 
+                    language: 'java', 
+                    theme: 'vs-dark', 
+                    minimap: { enabled: false },
+                    scrollBeyondLastLine: false,
+                    overviewRulerLanes: 0
+                });
+            });
+        });
+    </script>
+</body>
+</html>

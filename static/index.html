@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Web Code Navigator</title>
+    <style>
+        body { margin: 0; padding: 0; display: flex; height: 100vh; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #1e1e1e; color: #cccccc; }
+        #sidebar { width: 250px; background-color: #252526; border-right: 1px solid #3c3c3c; overflow-y: auto; display: flex; flex-direction: column; }
+        #sidebar-header { padding: 10px; font-weight: bold; background-color: #333333; text-transform: uppercase; font-size: 12px; letter-spacing: 1px; border-bottom: 1px solid #3c3c3c; }
+        #file-tree { padding: 5px 0; flex-grow: 1; }
+        #editor-container { flex-grow: 1; display: flex; flex-direction: column; }
+        #tabs { display: flex; background-color: #2d2d2d; overflow-x: auto; border-bottom: 1px solid #1e1e1e; }
+        .tab { padding: 8px 15px; cursor: pointer; border-right: 1px solid #1e1e1e; font-size: 13px; background-color: #2d2d2d; color: #969696; display: flex; align-items: center; }
+        .tab.active { background-color: #1e1e1e; color: #ffffff; }
+        .tab-close { margin-left: 8px; font-size: 14px; opacity: 0.6; }
+        .tab-close:hover { opacity: 1; }
+        #editor { flex-grow: 1; }
+        .tree-item { padding: 4px 10px 4px 20px; cursor: pointer; display: flex; align-items: center; white-space: nowrap; font-size: 13px; }
+        .tree-item:hover { background-color: #2a2d2e; }
+        .tree-item.selected { background-color: #37373d; color: #ffffff; }
+        .icon { width: 16px; height: 16px; margin-right: 6px; display: inline-block; fill: currentColor; }
+        .folder-icon { color: #dcb67a; }
+        .file-icon { color: #519aba; }
+        .children { padding-left: 10px; display: none; }
+        .children.open { display: block; }
+        .chevron { margin-right: 5px; font-size: 10px; width: 10px; transition: transform 0.1s; }
+        .chevron.open { transform: rotate(90deg); }
+        #status-bar { height: 22px; background-color: #007acc; color: white; display: flex; align-items: center; padding: 0 10px; font-size: 12px; }
+        button.save-btn { background-color: #0e639c; color: white; border: none; padding: 5px 10px; cursor: pointer; font-size: 12px; margin-left: auto; }
+        button.save-btn:hover { background-color: #1177bb; }
+    </style>
+</head>
+<body>
+    <div id="sidebar">
+        <div id="sidebar-header">Explorer</div>
+        <div id="file-tree"></div>
+    </div>
+    <div id="editor-container">
+        <div id="tabs">
+            <!-- Tabs will be injected here -->
+        </div>
+        <div id="editor"></div>
+        <div id="status-bar">
+            <span id="status-message">Ready</span>
+            <button class="save-btn" style="background-color:#4CAF50; margin-left: 15px;" onclick="window.location.href='/graph'">🗺️ Architecture Map</button>
+            <button class="save-btn" onclick="saveCurrentFile()">Save (Cmd+S)</button>
+        </div>
+    </div>
+
+    <!-- Load Monaco Editor -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.36.1/min/vs/loader.min.js"></script>
+    <script>
+        require.config({ paths: { 'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.36.1/min/vs' }});
+        let editor = null;
+        let currentFilePath = null;
+        let openFiles = {}; // { path: { content, model, state } }
+
+        require(['vs/editor/editor.main'], function() {
+            editor = monaco.editor.create(document.getElementById('editor'), {
+                value: '// Select a file from the explorer to view its contents',
+                language: 'javascript',
+                theme: 'vs-dark',
+                automaticLayout: true
+            });
+
+            editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, function() {
+                saveCurrentFile();
+            });
+
+            loadTree('');
+        });
+
+        async function loadTree(path, parentElement = document.getElementById('file-tree')) {
+            try {
+                const response = await fetch(`/api/tree?path=${encodeURIComponent(path)}`);
+                const items = await response.json();
+                
+                if (items.error) {
+                    console.error(items.error);
+                    return;
+                }
+
+                parentElement.innerHTML = '';
+                
+                items.forEach(item => {
+                    const div = document.createElement('div');
+                    const itemContent = document.createElement('div');
+                    itemContent.className = 'tree-item';
+                    
+                    if (item.is_dir) {
+                        itemContent.innerHTML = `<span class="chevron">▶</span><span class="icon folder-icon">📁</span> ${item.name}`;
+                        const childrenDiv = document.createElement('div');
+                        childrenDiv.className = 'children';
+                        div.appendChild(itemContent);
+                        div.appendChild(childrenDiv);
+                        
+                        itemContent.onclick = () => {
+                            const chevron = itemContent.querySelector('.chevron');
+                            if (childrenDiv.classList.contains('open')) {
+                                childrenDiv.classList.remove('open');
+                                chevron.classList.remove('open');
+                            } else {
+                                childrenDiv.classList.add('open');
+                                chevron.classList.add('open');
+                                if (childrenDiv.innerHTML === '') {
+                                    loadTree(item.path, childrenDiv);
+                                }
+                            }
+                        };
+                    } else {
+                        itemContent.innerHTML = `<span style="width:15px;display:inline-block"></span><span class="icon file-icon">📄</span> ${item.name}`;
+                        div.appendChild(itemContent);
+                        itemContent.onclick = () => openFile(item.path, item.name);
+                    }
+                    
+                    parentElement.appendChild(div);
+                });
+            } catch (e) {
+                console.error("Failed to load tree:", e);
+            }
+        }
+
+        async function openFile(path, name) {
+            // Document selection highlighting
+            document.querySelectorAll('.tree-item').forEach(el => el.classList.remove('selected'));
+            // Very naive highlight (doesn't work well with dynamic DOM, but good for demo)
+            
+            if (openFiles[path]) {
+                switchToTab(path);
+                return;
+            }
+
+            setStatus(`Loading ${name}...`);
+            try {
+                const response = await fetch(`/api/file?path=${encodeURIComponent(path)}`);
+                const data = await response.json();
+                
+                if (data.error) {
+                    setStatus(`Error: ${data.error}`);
+                    return;
+                }
+
+                // Determine language
+                let ext = name.split('.').pop().toLowerCase();
+                let lang = 'plaintext';
+                const langMap = { 'js': 'javascript', 'ts': 'typescript', 'py': 'python', 'html': 'html', 'css': 'css', 'json': 'json', 'md': 'markdown', 'java': 'java', 'c': 'c', 'cpp': 'cpp', 'rs': 'rust', 'go': 'go' };
+                if (langMap[ext]) lang = langMap[ext];
+
+                const model = monaco.editor.createModel(data.content, lang);
+                openFiles[path] = { name, model };
+                
+                addTab(path, name);
+                switchToTab(path);
+                setStatus(`Opened ${name}`);
+            } catch (e) {
+                setStatus(`Failed to open: ${e}`);
+            }
+        }
+
+        function addTab(path, name) {
+            const tabsContainer = document.getElementById('tabs');
+            const tab = document.createElement('div');
+            tab.className = 'tab';
+            tab.id = `tab-${path.replace(/[^a-zA-Z0-9]/g, '_')}`;
+            tab.innerHTML = `<span>${name}</span><span class="tab-close" onclick="closeTab(event, '${path}')">×</span>`;
+            tab.onclick = () => switchToTab(path);
+            tabsContainer.appendChild(tab);
+        }
+
+        function switchToTab(path) {
+            if (!openFiles[path]) return;
+            
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            const tabId = `tab-${path.replace(/[^a-zA-Z0-9]/g, '_')}`;
+            const tabElement = document.getElementById(tabId);
+            if (tabElement) tabElement.classList.add('active');
+            
+            currentFilePath = path;
+            editor.setModel(openFiles[path].model);
+        }
+
+        function closeTab(event, path) {
+            event.stopPropagation();
+            const tabId = `tab-${path.replace(/[^a-zA-Z0-9]/g, '_')}`;
+            const tabElement = document.getElementById(tabId);
+            if (tabElement) tabElement.remove();
+            
+            delete openFiles[path];
+            
+            if (currentFilePath === path) {
+                currentFilePath = null;
+                const remainingPaths = Object.keys(openFiles);
+                if (remainingPaths.length > 0) {
+                    switchToTab(remainingPaths[remainingPaths.length - 1]);
+                } else {
+                    editor.setModel(monaco.editor.createModel('// Select a file from the explorer to view its contents', 'javascript'));
+                }
+            }
+        }
+
+        async function saveCurrentFile() {
+            if (!currentFilePath) return;
+            
+            setStatus(`Saving ${currentFilePath}...`);
+            const content = editor.getValue();
+            
+            try {
+                const response = await fetch('/api/file', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ path: currentFilePath, content: content })
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    setStatus(`Saved ${currentFilePath}`);
+                } else {
+                    setStatus(`Failed to save: ${data.error}`);
+                }
+            } catch (e) {
+                setStatus(`Error saving: ${e}`);
+            }
+        }
+
+        function setStatus(msg) {
+            document.getElementById('status-message').innerText = msg;
+        }
+    </script>
+</body>
+</html>
