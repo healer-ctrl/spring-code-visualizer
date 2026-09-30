@@ -3,336 +3,508 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Infinite Canvas - Real Project Scanner</title>
+    <title>Spring Canvas IDE</title>
     <style>
-        body { margin: 0; padding: 0; background-color: #1a1a1a; color: #ccc; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; overflow: auto; }
+        *, *::before, *::after { box-sizing: border-box; }
+        body { margin: 0; background: #1a1a1a; color: #ccc; font-family: 'Segoe UI', system-ui, sans-serif; overflow: hidden; height: 100vh; display: flex; flex-direction: column; }
+
+        /* ── HEADER ── */
+        header {
+            flex-shrink: 0;
+            background: #252526; border-bottom: 1px solid #3c3c3c;
+            padding: 10px 16px; display: flex; align-items: center; gap: 10px;
+            z-index: 2000; box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+        }
+        header .logo { font-size: 18px; margin-right: 4px; }
+        header h1 { margin: 0; font-size: 15px; color: #fff; white-space: nowrap; font-weight: 600; }
+        
+        .path-wrapper { flex: 1; display: flex; gap: 8px; align-items: center; }
+        #projectPath {
+            flex: 1; background: #3c3c3c; border: 1px solid #555;
+            color: #fff; padding: 7px 12px; border-radius: 5px; font-size: 13px;
+            outline: none; transition: border-color 0.2s;
+        }
+        #projectPath:focus { border-color: #4A90E2; }
+        #projectPath::placeholder { color: #777; }
+
+        .btn { border: none; padding: 7px 14px; border-radius: 5px; cursor: pointer; font-size: 13px; font-weight: 500; transition: background 0.15s; }
+        .btn-primary { background: #0e639c; color: #fff; }
+        .btn-primary:hover { background: #1177bb; }
+        .btn-primary:disabled { background: #555; cursor: not-allowed; }
+        .btn-secondary { background: #3c3c3c; color: #ccc; }
+        .btn-secondary:hover { background: #4a4a4a; }
+
+        #stats { font-size: 12px; color: #888; white-space: nowrap; }
+
+        /* Filter pills */
+        .filter-bar { display: flex; gap: 6px; align-items: center; }
+        .pill {
+            font-size: 11px; padding: 3px 9px; border-radius: 20px; cursor: pointer;
+            border: 1px solid transparent; transition: all 0.15s; user-select: none;
+            font-weight: 500;
+        }
+        .pill.active { opacity: 1; }
+        .pill.inactive { opacity: 0.35; }
+
+        /* Search box */
+        #searchBox {
+            background: #3c3c3c; border: 1px solid #555; color: #fff;
+            padding: 5px 10px; border-radius: 5px; font-size: 12px; width: 160px; outline: none;
+        }
+        #searchBox:focus { border-color: #4A90E2; }
+        #searchBox::placeholder { color: #777; }
+
+        /* ── MAIN AREA ── */
+        .main { flex: 1; position: relative; overflow: auto; }
 
         #canvas {
-            width: 10000px; height: 10000px;
+            width: 12000px; height: 8000px;
             position: relative;
             background-image:
-                linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px);
-            background-size: 50px 50px;
+                linear-gradient(rgba(255,255,255,0.04) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px);
+            background-size: 40px 40px;
         }
 
-        header {
-            position: fixed; top: 0; left: 0; right: 0;
-            background-color: rgba(37,37,38,0.97); padding: 10px 20px;
-            border-bottom: 1px solid #3c3c3c; display: flex; align-items: center;
-            gap: 12px; z-index: 2000; box-shadow: 0 4px 6px rgba(0,0,0,0.5);
-        }
-        header h1 { margin: 0; font-size: 15px; color: #fff; white-space: nowrap; }
-        header input { background: #3c3c3c; border: 1px solid #555; color: #fff; padding: 6px 10px; border-radius: 4px; width: 260px; font-size: 13px; }
-        header button { background-color: #0e639c; color: white; border: none; padding: 6px 14px; border-radius: 4px; cursor: pointer; font-size: 13px; }
-        header button:hover { background-color: #1177bb; }
-        #stats { color: #888; font-size: 12px; margin-left: auto; white-space: nowrap; }
-
+        /* ── CODE WINDOWS ── */
         .code-window {
-            position: absolute;
-            width: 390px; height: 290px;
-            background-color: #1e1e1e;
-            border: 1px solid #444;
-            border-radius: 8px;
-            box-shadow: 0 8px 24px rgba(0,0,0,0.5);
-            display: flex; flex-direction: column;
-            overflow: hidden;
+            position: absolute; width: 400px; height: 300px;
+            background: #1e1e1e; border: 1px solid #3a3a3a; border-radius: 8px;
+            box-shadow: 0 6px 24px rgba(0,0,0,0.5);
+            display: flex; flex-direction: column; overflow: hidden;
+            transition: border-color 0.2s, box-shadow 0.2s;
+            will-change: transform;
         }
-        .code-window:hover { box-shadow: 0 10px 40px rgba(0,0,0,0.9); z-index: 50 !important; }
-        .code-window.active-editor { border-color: #4A90E2; }
+        .code-window.highlighted { border-color: #4A90E2; box-shadow: 0 0 0 2px rgba(74,144,226,0.3), 0 6px 24px rgba(0,0,0,0.5); }
+        .code-window.dimmed { opacity: 0.25; }
+        .code-window.active-monaco { border-color: #50E3C2; }
 
         .titlebar {
-            background-color: #2d2d2d; padding: 7px 12px;
-            font-size: 12px; font-weight: bold; color: #dcb67a;
+            padding: 7px 12px; font-size: 12px; font-weight: 600;
             cursor: grab; user-select: none;
             display: flex; justify-content: space-between; align-items: center;
-            border-bottom: 1px solid #1e1e1e; flex-shrink: 0;
+            flex-shrink: 0; border-bottom: 1px solid #2a2a2a;
         }
         .titlebar:active { cursor: grabbing; }
-        .badge {
-            font-size: 10px; padding: 2px 6px; border-radius: 3px;
-            background-color: rgba(255,255,255,0.1); color: #aaa; font-weight: normal;
-        }
+        .titlebar .filename { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+        .badge { font-size: 10px; padding: 2px 7px; border-radius: 10px; background: rgba(255,255,255,0.08); color: #aaa; font-weight: 400; flex-shrink: 0; margin-left: 8px; }
 
-        .editor-area { flex-grow: 1; position: relative; overflow: hidden; }
-        .drag-shield { position: absolute; top: 0; left: 0; right: 0; bottom: 0; z-index: 20; display: none; }
+        .editor-area { flex: 1; position: relative; overflow: hidden; }
+        .drag-shield { position: absolute; inset: 0; z-index: 20; display: none; }
 
-        /* Code preview shown when Monaco is NOT loaded (off-screen) */
+        /* Lightweight code preview */
         .code-preview {
-            position: absolute; top: 0; left: 0; right: 0; bottom: 0;
-            overflow: hidden; padding: 10px;
-            font-family: 'Menlo', 'Consolas', monospace;
-            font-size: 11px; line-height: 1.5; color: #d4d4d4;
-            background: #1e1e1e; white-space: pre; box-sizing: border-box;
-            cursor: text;
+            position: absolute; inset: 0; overflow: hidden;
+            padding: 10px 12px; font-family: 'Menlo','Consolas','Monaco',monospace;
+            font-size: 11px; line-height: 1.6; color: #d4d4d4;
+            background: #1e1e1e; white-space: pre; tab-size: 4;
         }
-        .code-preview:hover { opacity: 0.8; }
         .code-preview .kw  { color: #569cd6; }
         .code-preview .ann { color: #9cdcfe; }
         .code-preview .str { color: #ce9178; }
-        .code-preview .cmt { color: #6a9955; }
+        .code-preview .cmt { color: #6a9955; font-style: italic; }
+        .code-preview .num { color: #b5cea8; }
+        .code-preview .type { color: #4ec9b0; }
 
-        /* Monaco host — sits on top of preview when active */
-        .monaco-host {
-            position: absolute; top: 0; left: 0; right: 0; bottom: 0;
-            display: none; /* hidden until IntersectionObserver activates it */
-        }
+        .monaco-host { position: absolute; inset: 0; display: none; }
         .monaco-host.active { display: block; }
 
-        #svg-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1; }
-        path.connection { fill: none; stroke: #4A90E2; stroke-width: 2; opacity: 0.4; stroke-dasharray: 5,5; }
-
-        #loading {
-            position: fixed; top: 60px; left: 50%; transform: translateX(-50%);
-            color: #50E3C2; font-weight: bold; z-index: 3000; display: none;
-            background: #252526; padding: 12px 20px; border-radius: 6px;
-            border: 1px solid #50E3C2; font-size: 13px;
+        /* ── SVG CONNECTION LAYER ── */
+        #svg-layer {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none; z-index: 1;
         }
+        path.conn { fill: none; stroke-width: 1.5; opacity: 0.4; stroke-dasharray: 4,4; }
+
+        /* ── PROGRESS OVERLAY ── */
+        #progress-overlay {
+            position: fixed; inset: 0; background: rgba(0,0,0,0.75);
+            display: none; flex-direction: column;
+            align-items: center; justify-content: center; z-index: 9999;
+        }
+        #progress-overlay.visible { display: flex; }
+        .progress-card {
+            background: #252526; border: 1px solid #3c3c3c; border-radius: 10px;
+            padding: 30px 40px; min-width: 360px; text-align: center;
+        }
+        .progress-card h2 { margin: 0 0 16px; font-size: 16px; color: #fff; }
+        .progress-bar-track { background: #3c3c3c; border-radius: 6px; height: 8px; overflow: hidden; margin-bottom: 12px; }
+        .progress-bar-fill { height: 100%; background: linear-gradient(90deg, #4A90E2, #50E3C2); border-radius: 6px; width: 0%; transition: width 0.3s; }
+        .progress-msg { font-size: 12px; color: #888; }
+
+        /* ── EMPTY STATE ── */
+        #empty-state {
+            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            text-align: center; color: #555; pointer-events: none;
+        }
+        #empty-state .big { font-size: 48px; margin-bottom: 12px; }
+        #empty-state h2 { margin: 0 0 8px; font-size: 18px; color: #666; font-weight: 500; }
+        #empty-state p { margin: 0; font-size: 13px; }
     </style>
 </head>
 <body>
-    <header>
-        <h1>🗺 Spring Canvas IDE</h1>
-        <input type="text" id="projectPath" placeholder="Relative path to your project (e.g. Documents/MyProject)">
-        <button onclick="scanAndRender()">▶ Render Project</button>
-        <button onclick="window.location.href='/'" style="background:#444;">← Editor</button>
-        <span id="stats"></span>
-    </header>
 
-    <div id="loading">Scanning project files...</div>
+<header>
+    <span class="logo">🗺</span>
+    <h1>Spring Canvas IDE</h1>
 
+    <div class="path-wrapper">
+        <input type="text" id="projectPath"
+               placeholder="Paste absolute path to your Spring project  (e.g. /Users/you/projects/my-app)"
+               autocomplete="off" spellcheck="false">
+        <button class="btn btn-primary" id="renderBtn" onclick="startScan()">▶ Load Project</button>
+    </div>
+
+    <div class="filter-bar" id="filterBar" style="display:none">
+        <input type="text" id="searchBox" placeholder="🔍 search class…" oninput="applyFilters()">
+    </div>
+
+    <span id="stats"></span>
+</header>
+
+<!-- Progress overlay -->
+<div id="progress-overlay">
+    <div class="progress-card">
+        <h2>Scanning Project</h2>
+        <div class="progress-bar-track"><div class="progress-bar-fill" id="progressFill"></div></div>
+        <div class="progress-msg" id="progressMsg">Starting…</div>
+    </div>
+</div>
+
+<div class="main" id="mainScroll">
     <div id="canvas">
         <svg id="svg-layer"></svg>
     </div>
 
-    <!-- Monaco loader -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.36.1/min/vs/loader.min.js"></script>
-    <script>
-        const canvas   = document.getElementById('canvas');
-        const svgLayer = document.getElementById('svg-layer');
+    <!-- Empty state shown before first load -->
+    <div id="empty-state">
+        <div class="big">☕</div>
+        <h2>Paste your Spring project path above</h2>
+        <p>The canvas will map all your classes, services, repositories and DTOs.</p>
+    </div>
+</div>
 
-        let connections = [];
-        let monacoReady = false;
-        // nodeId → { editor: MonacoEditor | null, content: string }
-        const nodeState = {};
+<script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.36.1/min/vs/loader.min.js"></script>
+<script>
+// ═══════════════════════════════════════════════════════
+//  CONSTANTS & STATE
+// ═══════════════════════════════════════════════════════
+const canvas    = document.getElementById('canvas');
+const svgLayer  = document.getElementById('svg-layer');
+const mainScroll = document.getElementById('mainScroll');
 
-        const groupColors = {
-            Controller: '#4A90E2', Service: '#50E3C2', Repository: '#B8E986',
-            DTO: '#F5A623', Entity: '#D0021B', Configuration: '#8B572A',
-            Component: '#9B59B6', Exception: '#E74C3C', Other: '#9B9B9B'
-        };
+const GROUP_COLORS = {
+    Controller: '#4A90E2', Service: '#50E3C2', Repository: '#B8E986',
+    DTO: '#F5A623', Entity: '#D0021B', Configuration: '#8B572A',
+    Component: '#9B59B6', Mapper: '#E91E63', FeignClient: '#00BCD4',
+    Exception: '#FF7043', Util: '#78909C', Test: '#546E7A', Other: '#616161'
+};
+const TYPE_ORDER = [
+    'Controller','Service','Repository','Entity','DTO',
+    'Mapper','FeignClient','Component','Configuration','Exception','Util','Other','Test'
+];
 
-        // ── Monaco init ──────────────────────────────────────────────────────
-        require.config({ paths: { vs: 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.36.1/min/vs' }});
-        require(['vs/editor/editor.main'], () => { monacoReady = true; });
+let allNodes   = [];
+let allEdges   = [];
+let connections = [];
+let nodeState  = {};   // nodeId → { editor, content }
+let activeFilters = new Set(Object.keys(GROUP_COLORS));
 
-        // ── Lightweight syntax highlighter for the <pre> preview ─────────────
-        function highlight(code) {
-            return code
-                .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
-                .replace(/(@\w+)/g, '<span class="ann">$1</span>')
-                .replace(/\b(public|private|protected|class|interface|record|new|return|void|final|static|extends|implements|import|package|throws|abstract)\b/g, '<span class="kw">$1</span>')
-                .replace(/(\/\/[^\n]*)/g, '<span class="cmt">$1</span>')
-                .replace(/(".*?")/g, '<span class="str">$1</span>');
-        }
+// Monaco
+require.config({ paths: { vs: 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.36.1/min/vs' }});
+let monacoReady = false;
+require(['vs/editor/editor.main'], () => { monacoReady = true; });
 
-        // ── IntersectionObserver: lazy Monaco mount/unmount ──────────────────
-        const observer = new IntersectionObserver((entries) => {
-            entries.forEach(entry => {
-                const win    = entry.target;
-                const nodeId = win.dataset.nodeId;
-                const state  = nodeState[nodeId];
-                if (!state) return;
+// ═══════════════════════════════════════════════════════
+//  LIGHTWEIGHT SYNTAX HIGHLIGHT
+// ═══════════════════════════════════════════════════════
+function highlight(raw) {
+    const escaped = raw.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    return escaped
+        .replace(/(\/\/[^\n]*)/g, '<span class="cmt">$1</span>')
+        .replace(/("(?:[^"\\]|\\.)*")/g, '<span class="str">$1</span>')
+        .replace(/\b(public|private|protected|class|interface|record|enum|abstract|static|final|new|return|void|if|else|for|while|try|catch|throws|extends|implements|import|package|this|super|null|true|false)\b/g,
+                 '<span class="kw">$1</span>')
+        .replace(/(@\w+)/g, '<span class="ann">$1</span>')
+        .replace(/\b([A-Z]\w+)\b(?=\s+\w)/g, '<span class="type">$1</span>');
+}
 
-                const monacoHost = win.querySelector('.monaco-host');
-                const preview    = win.querySelector('.code-preview');
+// ═══════════════════════════════════════════════════════
+//  INTERSECTION OBSERVER — LAZY MONACO
+// ═══════════════════════════════════════════════════════
+const observer = new IntersectionObserver(entries => {
+    if (!monacoReady) return;
+    entries.forEach(entry => {
+        const win    = entry.target;
+        const id     = win.dataset.nodeId;
+        const state  = nodeState[id];
+        if (!state) return;
 
-                if (entry.isIntersecting) {
-                    // Window is visible → mount Monaco
-                    if (!state.editor && monacoReady) {
-                        monacoHost.classList.add('active');
-                        win.classList.add('active-editor');
-                        state.editor = monaco.editor.create(monacoHost, {
-                            value: state.content,
-                            language: 'java',
-                            theme: 'vs-dark',
-                            minimap: { enabled: false },
-                            scrollBeyondLastLine: false,
-                            automaticLayout: true,
-                            fontSize: 11,
-                            lineNumbers: 'off',
-                            folding: true,
-                            renderLineHighlight: 'none',
-                        });
-                        if (preview) preview.style.display = 'none';
-                    }
-                } else {
-                    // Window is off-screen → destroy Monaco, save memory
-                    if (state.editor) {
-                        state.content = state.editor.getValue();
-                        state.editor.dispose();
-                        state.editor = null;
-                        monacoHost.classList.remove('active');
-                        win.classList.remove('active-editor');
-                        if (preview) preview.style.display = 'block';
-                    }
-                }
+        const host    = win.querySelector('.monaco-host');
+        const preview = win.querySelector('.code-preview');
+
+        if (entry.isIntersecting && !state.editor) {
+            host.classList.add('active');
+            win.classList.add('active-monaco');
+            state.editor = monaco.editor.create(host, {
+                value: state.content, language: 'java', theme: 'vs-dark',
+                minimap: { enabled: false }, scrollBeyondLastLine: false,
+                automaticLayout: true, fontSize: 11, lineNumbers: 'off',
+                folding: true, renderLineHighlight: 'none', wordWrap: 'off',
+                overviewRulerLanes: 0, scrollbar: { verticalScrollbarSize: 6 }
             });
-        }, {
-            root: null,           // viewport
-            rootMargin: '200px',  // start loading 200px before it enters view
-            threshold: 0
-        });
+            if (preview) preview.style.display = 'none';
+        } else if (!entry.isIntersecting && state.editor) {
+            state.content = state.editor.getValue();
+            state.editor.dispose();
+            state.editor = null;
+            host.classList.remove('active');
+            win.classList.remove('active-monaco');
+            if (preview) preview.style.display = '';
+        }
+    });
+}, { root: mainScroll, rootMargin: '300px', threshold: 0 });
 
-        // ── Drag logic ───────────────────────────────────────────────────────
-        let draggedWin = null, offX = 0, offY = 0;
+// ═══════════════════════════════════════════════════════
+//  DRAG
+// ═══════════════════════════════════════════════════════
+let dragging = null, offX = 0, offY = 0;
 
-        document.addEventListener('mousedown', e => {
-            if (e.target.closest('.titlebar')) {
-                draggedWin = e.target.closest('.code-window');
-                document.querySelectorAll('.code-window').forEach(w => w.style.zIndex = 10);
-                draggedWin.style.zIndex = 100;
-                document.querySelectorAll('.drag-shield').forEach(s => s.style.display = 'block');
-                const r = draggedWin.getBoundingClientRect();
-                offX = e.clientX - r.left;
-                offY = e.clientY - r.top;
+document.addEventListener('mousedown', e => {
+    const bar = e.target.closest('.titlebar');
+    if (!bar) return;
+    dragging = bar.closest('.code-window');
+    document.querySelectorAll('.code-window').forEach(w => w.style.zIndex = 10);
+    dragging.style.zIndex = 200;
+    document.querySelectorAll('.drag-shield').forEach(s => s.style.display = 'block');
+    const r  = dragging.getBoundingClientRect();
+    const cr = canvas.getBoundingClientRect();
+    offX = e.clientX - r.left;
+    offY = e.clientY - r.top;
+    e.preventDefault();
+});
+
+document.addEventListener('mousemove', e => {
+    if (!dragging) return;
+    const cr  = canvas.getBoundingClientRect();
+    const scX = mainScroll.scrollLeft;
+    const scY = mainScroll.scrollTop;
+    dragging.style.left = (e.clientX - cr.left - offX + scX) + 'px';
+    dragging.style.top  = (e.clientY - cr.top  - offY + scY) + 'px';
+    updateLines();
+});
+
+document.addEventListener('mouseup', () => {
+    dragging = null;
+    document.querySelectorAll('.drag-shield').forEach(s => s.style.display = 'none');
+});
+
+// ═══════════════════════════════════════════════════════
+//  SVG LINES
+// ═══════════════════════════════════════════════════════
+function updateLines() {
+    connections.forEach(({ from, to, pathId }) => {
+        const w1   = document.getElementById(`win_${from}`);
+        const w2   = document.getElementById(`win_${to}`);
+        const path = document.getElementById(pathId);
+        if (!w1 || !w2 || !path) return;
+        if (w1.classList.contains('dimmed') || w2.classList.contains('dimmed')) {
+            path.style.display = 'none'; return;
+        }
+        path.style.display = '';
+        const x1 = parseInt(w1.style.left) + 400;
+        const y1 = parseInt(w1.style.top)  + 150;
+        const x2 = parseInt(w2.style.left);
+        const y2 = parseInt(w2.style.top)  + 150;
+        path.setAttribute('d', `M${x1} ${y1} C${x1+100} ${y1},${x2-100} ${y2},${x2} ${y2}`);
+    });
+}
+
+// ═══════════════════════════════════════════════════════
+//  FILTER / SEARCH
+// ═══════════════════════════════════════════════════════
+function applyFilters() {
+    const query = (document.getElementById('searchBox')?.value || '').toLowerCase();
+    document.querySelectorAll('.code-window').forEach(win => {
+        const id    = win.dataset.nodeId;
+        const node  = allNodes.find(n => n.id === id);
+        if (!node) return;
+        const matchGroup  = activeFilters.has(node.group);
+        const matchSearch = !query || node.label.toLowerCase().includes(query);
+        win.classList.toggle('dimmed', !(matchGroup && matchSearch));
+    });
+    updateLines();
+}
+
+function buildFilterBar() {
+    const bar = document.getElementById('filterBar');
+    bar.style.display = 'flex';
+    // Collect groups actually present
+    const presentGroups = [...new Set(allNodes.map(n => n.group))];
+    // Clear existing pills
+    bar.querySelectorAll('.pill').forEach(p => p.remove());
+
+    presentGroups.forEach(group => {
+        const color = GROUP_COLORS[group] || '#9B9B9B';
+        const pill  = document.createElement('span');
+        pill.className   = 'pill active';
+        pill.textContent = group;
+        pill.style.borderColor    = color;
+        pill.style.backgroundColor = color + '22';
+        pill.style.color = color;
+        pill.onclick = () => {
+            if (activeFilters.has(group)) {
+                activeFilters.delete(group);
+                pill.classList.replace('active','inactive');
+            } else {
+                activeFilters.add(group);
+                pill.classList.replace('inactive','active');
             }
-        });
-
-        document.addEventListener('mousemove', e => {
-            if (!draggedWin) return;
-            const cr = canvas.getBoundingClientRect();
-            draggedWin.style.left = (e.clientX - cr.left - offX) + 'px';
-            draggedWin.style.top  = (e.clientY - cr.top  - offY) + 'px';
-            updateLines();
-        });
-
-        document.addEventListener('mouseup', () => {
-            draggedWin = null;
-            document.querySelectorAll('.drag-shield').forEach(s => s.style.display = 'none');
-        });
-
-        // ── SVG connection lines ──────────────────────────────────────────────
-        function updateLines() {
-            connections.forEach(({ from, to, pathId }) => {
-                const w1   = document.getElementById(`win_${from}`);
-                const w2   = document.getElementById(`win_${to}`);
-                const path = document.getElementById(pathId);
-                if (!w1 || !w2 || !path) return;
-
-                const x1 = parseInt(w1.style.left) + 390;
-                const y1 = parseInt(w1.style.top)  + 145;
-                const x2 = parseInt(w2.style.left);
-                const y2 = parseInt(w2.style.top)  + 145;
-
-                path.setAttribute('d', `M${x1} ${y1} C${x1+90} ${y1},${x2-90} ${y2},${x2} ${y2}`);
-            });
-        }
-
-        // ── Main: scan project & render canvas ───────────────────────────────
-        async function scanAndRender() {
-            const loading = document.getElementById('loading');
-            loading.style.display = 'block';
-            loading.textContent   = 'Scanning project files...';
-
-            // Teardown previous run
-            document.querySelectorAll('.code-window').forEach(w => {
-                observer.unobserve(w);
-                const id = w.dataset.nodeId;
-                if (nodeState[id]?.editor) { nodeState[id].editor.dispose(); }
-                w.remove();
-            });
-            Object.keys(nodeState).forEach(k => delete nodeState[k]);
-            svgLayer.innerHTML = '';
-            connections = [];
-
-            const path = document.getElementById('projectPath').value.trim();
-
-            try {
-                const res  = await fetch(`/api/architecture?path=${encodeURIComponent(path)}`);
-                const data = await res.json();
-
-                if (data.error) { alert(data.error); loading.style.display = 'none'; return; }
-
-                const nodes = data.nodes;
-                const edges = data.edges;
-
-                document.getElementById('stats').textContent =
-                    `${nodes.length} classes · ${edges.length} dependencies`;
-
-                loading.textContent = `Rendering ${nodes.length} class windows...`;
-
-                // Layout: group by type, arrange in type columns
-                const groups  = {};
-                nodes.forEach(n => { (groups[n.group] = groups[n.group] || []).push(n); });
-                const typeOrder = ['Controller','Service','Repository','Entity','DTO','Component','Configuration','Exception','Other'];
-                let col = 0;
-
-                typeOrder.forEach(type => {
-                    const group = groups[type];
-                    if (!group) return;
-                    group.forEach((node, row) => {
-                        const x = 80 + col * 430;
-                        const y = 150 + row * 320;
-                        renderWindow(node, x, y);
-                    });
-                    col++;
-                });
-
-                // Edges
-                edges.forEach((edge, i) => {
-                    const pathEl = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-                    pathEl.className.baseVal = 'connection';
-                    pathEl.id = `conn_${i}`;
-                    svgLayer.appendChild(pathEl);
-                    connections.push({ from: edge.from, to: edge.to, pathId: pathEl.id });
-                });
-
-                setTimeout(() => { updateLines(); loading.style.display = 'none'; }, 300);
-
-            } catch (err) {
-                alert('Failed: ' + err);
-                loading.style.display = 'none';
-            }
-        }
-
-        function renderWindow(node, x, y) {
-            const color   = groupColors[node.group] || groupColors.Other;
-            const content = node.content || '// No content';
-
-            // Store state
-            nodeState[node.id] = { editor: null, content };
-
-            const win = document.createElement('div');
-            win.className    = 'code-window';
-            win.id           = `win_${node.id}`;
-            win.dataset.nodeId = node.id;
-            win.style.left   = x + 'px';
-            win.style.top    = y + 'px';
-
-            win.innerHTML = `
-                <div class="titlebar">
-                    <span style="color:${color}" title="${node.title}">📄 ${node.label}.java</span>
-                    <span class="badge">${node.group}</span>
-                </div>
-                <div class="editor-area">
-                    <div class="drag-shield"></div>
-                    <!-- Lightweight preview (always present, hidden when Monaco active) -->
-                    <div class="code-preview">${highlight(content.slice(0, 2000))}</div>
-                    <!-- Monaco mounts here lazily -->
-                    <div class="monaco-host"></div>
-                </div>
-            `;
-
-            canvas.appendChild(win);
-            observer.observe(win);  // 👈 This is the magic
-        }
-
-        // Auto-run on load if path is pre-filled
-        window.onload = () => {
-            const path = document.getElementById('projectPath').value.trim();
-            if (path) scanAndRender();
+            applyFilters();
         };
-    </script>
+        // Insert before the search box
+        bar.insertBefore(pill, document.getElementById('searchBox'));
+    });
+}
+
+// ═══════════════════════════════════════════════════════
+//  RENDER WINDOW
+// ═══════════════════════════════════════════════════════
+function renderWindow(node, x, y) {
+    const color   = GROUP_COLORS[node.group] || '#9B9B9B';
+    const content = node.content || '// No content';
+
+    nodeState[node.id] = { editor: null, content };
+
+    const win = document.createElement('div');
+    win.className      = 'code-window';
+    win.id             = `win_${node.id}`;
+    win.dataset.nodeId = node.id;
+    win.style.left     = x + 'px';
+    win.style.top      = y + 'px';
+    win.style.zIndex   = 10;
+
+    // Titlebar background tint
+    const bgTint = color + '18';
+
+    win.innerHTML = `
+        <div class="titlebar" style="background:${bgTint}; border-bottom-color: ${color}33;">
+            <span class="filename" style="color:${color}" title="${node.filepath}">📄 ${node.label}.java</span>
+            <span class="badge">${node.group}</span>
+        </div>
+        <div class="editor-area">
+            <div class="drag-shield"></div>
+            <div class="code-preview">${highlight(content.slice(0, 3000))}</div>
+            <div class="monaco-host"></div>
+        </div>
+    `;
+
+    canvas.appendChild(win);
+    observer.observe(win);
+}
+
+// ═══════════════════════════════════════════════════════
+//  SCAN — via SSE streaming
+// ═══════════════════════════════════════════════════════
+async function startScan() {
+    const path = document.getElementById('projectPath').value.trim();
+    if (!path) { alert('Please enter a project path first.'); return; }
+
+    document.getElementById('renderBtn').disabled = true;
+
+    // Teardown previous
+    document.querySelectorAll('.code-window').forEach(win => {
+        observer.unobserve(win);
+        const s = nodeState[win.dataset.nodeId];
+        if (s?.editor) { s.editor.dispose(); }
+        win.remove();
+    });
+    Object.keys(nodeState).forEach(k => delete nodeState[k]);
+    connections = [];
+    svgLayer.innerHTML = '';
+    allNodes = []; allEdges = [];
+    document.getElementById('stats').textContent = '';
+    document.getElementById('empty-state').style.display = 'none';
+
+    // Show progress
+    const overlay = document.getElementById('progress-overlay');
+    const fill    = document.getElementById('progressFill');
+    const msg     = document.getElementById('progressMsg');
+    overlay.classList.add('visible');
+    fill.style.width = '0%';
+    msg.textContent  = 'Connecting…';
+
+    const evtSource = new EventSource(`/api/architecture?path=${encodeURIComponent(path)}`);
+
+    evtSource.onmessage = e => {
+        const data = JSON.parse(e.data);
+
+        if (data.progress !== undefined) {
+            const pct = data.total > 0 ? Math.round(data.progress / data.total * 100) : 0;
+            fill.style.width  = pct + '%';
+            msg.textContent   = data.message;
+        }
+
+        if (data.done) {
+            evtSource.close();
+            overlay.classList.remove('visible');
+            document.getElementById('renderBtn').disabled = false;
+
+            allNodes = data.nodes;
+            allEdges = data.edges;
+
+            if (!allNodes.length) {
+                document.getElementById('empty-state').style.display = '';
+                document.getElementById('empty-state').querySelector('h2').textContent = 'No Java classes found in this directory.';
+                return;
+            }
+
+            // Layout: group by type in columns
+            const grouped = {};
+            allNodes.forEach(n => { (grouped[n.group] = grouped[n.group] || []).push(n); });
+            const COLS = 7, COL_W = 450, ROW_H = 330;
+            let col = 0;
+            TYPE_ORDER.forEach(type => {
+                const grp = grouped[type];
+                if (!grp) return;
+                grp.forEach((node, row) => {
+                    renderWindow(node, 60 + col * COL_W, 60 + row * ROW_H);
+                });
+                col++;
+            });
+
+            // Edges
+            allEdges.forEach((edge, i) => {
+                const pathEl = document.createElementNS('http://www.w3.org/2000/svg','path');
+                const color  = GROUP_COLORS[allNodes.find(n => n.id === edge.from)?.group] || '#4A90E2';
+                pathEl.setAttribute('class','conn');
+                pathEl.setAttribute('stroke', color);
+                pathEl.id = `conn_${i}`;
+                svgLayer.appendChild(pathEl);
+                connections.push({ from: edge.from, to: edge.to, pathId: pathEl.id });
+            });
+
+            document.getElementById('stats').textContent =
+                `${allNodes.length} classes · ${allEdges.length} deps`;
+
+            buildFilterBar();
+            setTimeout(updateLines, 200);
+        }
+    };
+
+    evtSource.onerror = () => {
+        evtSource.close();
+        overlay.classList.remove('visible');
+        document.getElementById('renderBtn').disabled = false;
+        document.getElementById('empty-state').style.display = '';
+        alert('Failed to scan project. Make sure the path is correct and the server is running.');
+    };
+}
+
+// Allow Enter key in path input
+document.getElementById('projectPath').addEventListener('keydown', e => {
+    if (e.key === 'Enter') startScan();
+});
+</script>
 </body>
 </html>
